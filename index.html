@@ -543,6 +543,10 @@ let freeSpins = parseInt(localStorage.getItem('freeSpins')) || 0;
         setTimeout(() => balEl.classList.remove('flash-deduct'), 300);
       }
 
+
+localStorage.setItem('points', points);
+localStorage.setItem('freeSpins', freeSpins);
+      
       const btn      = document.getElementById('spinBtn');
       const resultEl = document.getElementById('result');
       const frame    = document.getElementById('reelFrame');
