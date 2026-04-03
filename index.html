@@ -383,8 +383,8 @@
     const STARTING_PTS = 1000;
 
     // ── State ────────────────────────────────────────────────────
-    let points     = STARTING_PTS;
-    let freeSpins  = 0;           // always 0 at start; use grantFreeSpins() to add
+   let points = parseInt(localStorage.getItem('points')) || STARTING_PTS;
+let freeSpins = parseInt(localStorage.getItem('freeSpins')) || 0;
     let activeTier = TIERS[0];
     let spinning   = false;
 
