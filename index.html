@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Slot Reel</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      background: #0d0d1a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', sans-serif;
+      color: #fff;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      color: #f0c040;
+      text-shadow: 0 0 24px rgba(240,192,64,0.5);
+      margin-bottom: 28px;
+    }
+
+    /* ── Machine shell ── */
+    .machine {
+      background: linear-gradient(160deg, #1e1e3a, #12122a);
+      border: 2px solid #2e2e5a;
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 8px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+
+    /* ── Reel window ── */
+    .reel-frame {
+      width: 280px;
+      height: 280px;
+      overflow: hidden;
+      border-radius: 12px;
+      position: relative;
+      border: 2px solid var(--tier-color, #3a3a6a);
+      box-shadow:
+        inset 0 0 40px rgba(0,0,0,0.6),
+        0 0 0 1px rgba(255,255,255,0.04);
+      transition: border-color 0.4s, box-shadow 0.4s;
+    }
+
+    .reel-frame.winner {
+      box-shadow:
+        inset 0 0 40px rgba(0,0,0,0.6),
+        0 0 0 1px var(--tier-color, #f0c040),
+        0 0 24px color-mix(in srgb, var(--tier-color, #f0c040) 50%, transparent),
+        0 0 60px color-mix(in srgb, var(--tier-color, #f0c040) 20%, transparent);
+    }
+
+    /* Top & bottom gradient fades */
+    .reel-frame::before,
+    .reel-frame::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0;
+      height: 70px;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .reel-frame::before {
+      top: 0;
+      background: linear-gradient(to bottom, rgba(13,13,26,0.92) 0%, transparent 100%);
+    }
+    .reel-frame::after {
+      bottom: 0;
+      background: linear-gradient(to top, rgba(13,13,26,0.92) 0%, transparent 100%);
+    }
+
+    /* Horizontal selection lines */
+    .reel-lines {
+      position: absolute;
+      top: 50%;
+      left: 0; right: 0;
+      transform: translateY(-50%);
+      pointer-events: none;
+      z-index: 11;
+    }
+    .reel-lines::before,
+    .reel-lines::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0;
+      height: 1px;
+      background: color-mix(in srgb, var(--tier-color, #f0c040) 50%, transparent);
+      box-shadow: 0 0 6px var(--tier-color, #f0c040);
+    }
+    .reel-lines::before { top: -141px; }
+    .reel-lines::after  { top:  141px; }
+
+    /* ── Reel strip ── */
+    .reel-strip {
+      display: flex;
+      flex-direction: column;
+      will-change: transform;
+    }
+
+    /* ── Individual item ── */
+    .reel-item {
+      width: 280px;
+      height: 280px;
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0d0d1a;
+      user-select: none;
+    }
+
+    /* Full-cell image — contained so nothing is cropped */
+    .reel-item .item-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      padding: 24px;
+      display: block;
+    }
+
+    /* Placeholder shown when no image is set */
+    .reel-item .item-placeholder {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.5);
+    }
+
+    /* Name bar — sits at the bottom, always visible but unobtrusive */
+    .reel-item .item-name {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      text-align: center;
+      color: rgba(255,255,255,0.75);
+      background: linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 100%);
+    }
+
+    /* ── Win result label ── */
+    #result {
+      margin-top: 14px;
+      min-height: 22px;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      text-align: center;
+      color: var(--tier-color, #f0c040);
+      text-shadow: 0 0 16px color-mix(in srgb, var(--tier-color, #f0c040) 70%, transparent);
+      opacity: 0;
+      transition: opacity 0.35s;
+    }
+
+    /* ── Tier selector ── */
+    .tier-selector {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .tier-btn {
+      flex: 1;
+      padding: 10px 16px;
+      border: 2px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.04);
+      color: rgba(255,255,255,0.45);
+      cursor: pointer;
+      text-align: center;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+    }
+
+    .tier-btn:hover:not(.active) {
+      border-color: rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.7);
+    }
+
+    .tier-btn.active {
+      border-color: var(--tier-color, #f0c040);
+      color: #fff;
+      background: color-mix(in srgb, var(--tier-color, #f0c040) 12%, transparent);
+    }
+
+    .tier-btn-name {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .tier-btn-cost {
+      font-size: 0.68rem;
+      letter-spacing: 1px;
+      margin-top: 3px;
+      opacity: 0.7;
+    }
+
+    /* ── Balance ── */
+    .balance {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .balance-label {
+      font-size: 0.75rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.35);
+    }
+
+    .balance-amount {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #f0c040;
+      text-shadow: 0 0 16px rgba(240,192,64,0.4);
+      transition: color 0.2s, text-shadow 0.2s;
+    }
+
+    .balance-amount.flash-deduct {
+      color: #ff6060;
+      text-shadow: 0 0 16px rgba(255,96,96,0.5);
+    }
+
+    /* ── Free spins badge ── */
+    .free-spins {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #60e080;
+      text-shadow: 0 0 10px rgba(96,224,128,0.5);
+      min-height: 18px;
+      transition: opacity 0.2s;
+    }
+
+    .free-spins:empty { opacity: 0; }
+
+    /* ── Controls ── */
+    .controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    /* ── Spin button ── */
+    #spinBtn {
+      padding: 14px 52px;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      background: linear-gradient(135deg,
+        var(--tier-color, #f0c040) 0%,
+        color-mix(in srgb, var(--tier-color, #f0c040) 60%, #000) 100%
+      );
+      color: #0d0d1a;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.2s, opacity 0.2s;
+      box-shadow: 0 4px 24px color-mix(in srgb, var(--tier-color, #f0c040) 40%, transparent);
+    }
+
+    #spinBtn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px color-mix(in srgb, var(--tier-color, #f0c040) 60%, transparent);
+    }
+
+    #spinBtn:active:not(:disabled) { transform: translateY(0); }
+
+    #spinBtn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    #spinBtn.no-funds {
+      background: linear-gradient(135deg, #555 0%, #333 100%);
+      box-shadow: none;
+    }
+
+    .spin-cost-label {
+      font-size: 0.72rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.25);
+      min-height: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Slot Reel</h1>
+
+  <div class="machine" id="machine">
+    <div class="reel-frame" id="reelFrame">
+      <div class="reel-lines"></div>
+      <div class="reel-strip" id="strip"></div>
+    </div>
+    <div id="result"></div>
+  </div>
+
+  <div class="controls">
+    <div class="balance">
+      <span class="balance-label">Points</span>
+      <span class="balance-amount" id="balanceDisplay">1000</span>
+    </div>
+
+    <div class="tier-selector" id="tierSelector"></div>
+
+    <div class="free-spins" id="freeSpinsDisplay"></div>
+
+    <button id="spinBtn" onclick="spin()">SPIN</button>
+    <div class="spin-cost-label" id="spinCostLabel"></div>
+  </div>
+
+  <script>
+    // ============================================================
+    //  TIERS — add, remove, or edit tiers here only.
+    //  Each tier has its own cost, color, and item pool.
+    //
+    //  id     — unique string identifier
+    //  name   — displayed label
+    //  cost   — points deducted per spin
+    //  color  — accent color for this tier (hex or CSS color)
+    //  items  — array of { name, image, weight }
+    //             image: URL/path, or null for text placeholder
+    //             weight: relative probability (higher = more common)
+    // ============================================================
+    const TIERS = [
+      {
+        id:    'basic',
+        name:  'Basic',
+        cost:  50,
+        color: '#6090ff',
+    items: [
+  { name: 'Cherry', image: 'https://upload.wikimedia.org/wikipedia/commons/b/bb/Cherry_Stella444.jpg', weight: 35 },
+  { name: 'Lemon',  image: 'https://upload.wikimedia.org/wikipedia/commons/c/c4/Lemon.jpg', weight: 30 },
+  { name: 'Grapes', image: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Red_grapes.jpg', weight: 20 },
+  { name: 'Bell',   image: 'https://upload.wikimedia.org/wikipedia/commons/6/6e/Bell_icon.png', weight: 15 },
+]
+  
+      },
+      {
+        id:    'premium',
+        name:  'Premium',
+        cost:  150,
+        color: '#f0c040',
+       items: [
+  { name: 'Bell',    image: 'https://upload.wikimedia.org/wikipedia/commons/6/6e/Bell_icon.png', weight: 25 },
+  { name: 'Star',    image: 'https://upload.wikimedia.org/wikipedia/commons/4/44/Plain_Yellow_Star.png', weight: 20 },
+  { name: 'Diamond', image: 'https://upload.wikimedia.org/wikipedia/commons/8/8f/Diamond_icon.png', weight: 15 },
+  { name: 'Crown',   image: 'https://upload.wikimedia.org/wikipedia/commons/6/6b/Crown_icon.png', weight: 10 },
+  { name: 'Seven',   image: 'https://upload.wikimedia.org/wikipedia/commons/3/3a/Seven_icon.png', weight: 5 },
+  { name: 'Jackpot', image: 'https://upload.wikimedia.org/wikipedia/commons/5/5a/Gold_coin_icon.png', weight: 1 },
+],
+      },
+    ];
+    // ============================================================
+
+    const ITEM_H       = 280; // must match .reel-item height in CSS
+    const STARTING_PTS = 1000;
+
+    // ── State ────────────────────────────────────────────────────
+    let points     = STARTING_PTS;
+    let freeSpins  = 0;           // always 0 at start; use grantFreeSpins() to add
+    let activeTier = TIERS[0];
+    let spinning   = false;
+
+    // ── Grant free spins (programmatic use only) ──────────────
+    // Call this from server responses, rewards, admin actions, etc.
+    // Example: grantFreeSpins(3)
+    function grantFreeSpins(amount) {
+      if (typeof amount !== 'number' || amount < 1) return;
+      freeSpins += Math.floor(amount);
+      updateUI();
+    }
+
+    // ── Weighted random pick from a tier's item pool ──────────
+    function pickWinner(tier) {
+      const total = tier.items.reduce((s, item) => s + item.weight, 0);
+      let r = Math.random() * total;
+      for (const item of tier.items) {
+        r -= item.weight;
+        if (r <= 0) return item;
+      }
+      return tier.items[tier.items.length - 1];
+    }
+
+    // ── Build the reel strip for this spin ────────────────────
+    function buildStripItems(winner, tier) {
+      const arr = [];
+      const len = 38 + Math.floor(Math.random() * 6);
+      for (let i = 0; i < len; i++) {
+        arr.push(tier.items[Math.floor(Math.random() * tier.items.length)]);
+      }
+      arr.push(winner);
+      return arr;
+    }
+
+    // ── Render strip DOM ──────────────────────────────────────
+    function renderStrip(stripItems) {
+      const strip = document.getElementById('strip');
+      strip.innerHTML = '';
+      stripItems.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'reel-item';
+
+        if (item.image) {
+          const img = document.createElement('img');
+          img.className = 'item-img';
+          img.src = item.image;
+          img.alt = item.name;
+          img.draggable = false;
+          div.appendChild(img);
+
+          const nameEl = document.createElement('div');
+          nameEl.className = 'item-name';
+          nameEl.textContent = item.name;
+          div.appendChild(nameEl);
+        } else {
+          const placeholder = document.createElement('div');
+          placeholder.className = 'item-placeholder';
+          placeholder.textContent = item.name;
+          div.appendChild(placeholder);
+        }
+
+        strip.appendChild(div);
+      });
+    }
+
+    // ── Easing: quartic ease-out ──────────────────────────────
+    function easeOut(t) {
+      return 1 - Math.pow(1 - t, 4);
+    }
+
+    // ── Apply active tier's color as a CSS variable ───────────
+    function applyTierColor(color) {
+      document.getElementById('machine').style.setProperty('--tier-color', color);
+      document.querySelector('.controls').style.setProperty('--tier-color', color);
+    }
+
+    // ── Select a tier ─────────────────────────────────────────
+    function selectTier(id) {
+      activeTier = TIERS.find(t => t.id === id);
+      document.querySelectorAll('.tier-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.id === id);
+      });
+      applyTierColor(activeTier.color);
+      updateUI();
+    }
+
+    // ── Build tier selector buttons ───────────────────────────
+    function buildTierSelector() {
+      const container = document.getElementById('tierSelector');
+      TIERS.forEach(tier => {
+        const btn = document.createElement('button');
+        btn.className = 'tier-btn' + (tier === activeTier ? ' active' : '');
+        btn.dataset.id = tier.id;
+        btn.onclick = () => selectTier(tier.id);
+        btn.innerHTML = `
+          <div class="tier-btn-name">${tier.name}</div>
+          <div class="tier-btn-cost">${tier.cost} pts</div>
+        `;
+        container.appendChild(btn);
+      });
+    }
+
+    // ── Update all UI state ───────────────────────────────────
+    function updateUI() {
+      document.getElementById('balanceDisplay').textContent = points.toLocaleString();
+
+      const usingFree = freeSpins > 0;
+      const canAfford = usingFree || points >= activeTier.cost;
+
+      // Free spins badge
+      const fsEl = document.getElementById('freeSpinsDisplay');
+      fsEl.textContent = freeSpins > 0 ? `${freeSpins} free spin${freeSpins !== 1 ? 's' : ''} available` : '';
+
+      // Spin button
+      const btn = document.getElementById('spinBtn');
+      btn.disabled = !canAfford;
+      btn.classList.toggle('no-funds', !canAfford);
+      btn.textContent = !canAfford ? 'NO FUNDS' : 'SPIN';
+
+      // Cost label
+      const costLabel = document.getElementById('spinCostLabel');
+      if (!canAfford) {
+        costLabel.textContent = `need ${activeTier.cost} pts`;
+      } else if (usingFree) {
+        costLabel.textContent = 'free spin — no cost';
+      } else {
+        costLabel.textContent = `${activeTier.cost} pts per spin`;
+      }
+    }
+
+    // ── Init ──────────────────────────────────────────────────
+    buildTierSelector();
+    applyTierColor(activeTier.color);
+    renderStrip([activeTier.items[0]]);
+    updateUI();
+
+    // Grant starter free spins programmatically
+    grantFreeSpins(2);
+
+    // ── Spin ──────────────────────────────────────────────────
+    function spin() {
+      if (spinning) return;
+      const usingFree = freeSpins > 0;
+      if (!usingFree && points < activeTier.cost) return;
+
+      spinning = true;
+
+      // Deduct cost or consume free spin
+      if (usingFree) {
+        freeSpins--;
+      } else {
+        points -= activeTier.cost;
+        const balEl = document.getElementById('balanceDisplay');
+        balEl.textContent = points.toLocaleString();
+        balEl.classList.add('flash-deduct');
+        setTimeout(() => balEl.classList.remove('flash-deduct'), 300);
+      }
+
+      const btn      = document.getElementById('spinBtn');
+      const resultEl = document.getElementById('result');
+      const frame    = document.getElementById('reelFrame');
+
+      btn.disabled = true;
+      resultEl.style.opacity = '0';
+      frame.classList.remove('winner');
+
+      // Pick winner from active tier's pool
+      const winner     = pickWinner(activeTier);
+      const stripItems = buildStripItems(winner, activeTier);
+      renderStrip(stripItems);
+
+      const strip   = document.getElementById('strip');
+      const targetY = -(stripItems.length - 1) * ITEM_H;
+
+      strip.style.transition = 'none';
+      strip.style.transform  = 'translateY(0px)';
+      void strip.offsetHeight;
+
+      const duration = 3200 + Math.random() * 600;
+      let startTime  = null;
+
+      function animate(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const t      = Math.min((timestamp - startTime) / duration, 1);
+        const eased  = easeOut(t);
+        strip.style.transform = `translateY(${targetY * eased}px)`;
+
+        if (t < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          strip.style.transform = `translateY(${targetY}px)`;
+          spinning = false;
+          frame.classList.add('winner');
+          resultEl.textContent  = winner.name;
+          resultEl.style.opacity = '1';
+          updateUI();
+        }
+      }
+
+      requestAnimationFrame(animate);
+    }
+  </script>
+
+</body>
+</html>
