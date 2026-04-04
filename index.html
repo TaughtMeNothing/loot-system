@@ -383,10 +383,14 @@
     const STARTING_PTS = 1000;
 
     // ── State ────────────────────────────────────────────────────
-   let points = parseInt(localStorage.getItem('points')) || STARTING_PTS;
-let freeSpins = parseInt(localStorage.getItem('freeSpins')) || 0;
-    let activeTier = TIERS[0];
-    let spinning   = false;
+let savedPoints = localStorage.getItem('points');
+let savedFreeSpins = localStorage.getItem('freeSpins');
+
+let points = savedPoints !== null ? parseInt(savedPoints) : STARTING_PTS;
+let freeSpins = savedFreeSpins !== null ? parseInt(savedFreeSpins) : 0;
+
+let activeTier = TIERS[0];
+let spinning   = false;
 
     // ── Grant free spins (programmatic use only) ──────────────
     // Call this from server responses, rewards, admin actions, etc.
